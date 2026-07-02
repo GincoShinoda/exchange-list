@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>交換アイテム台帳</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700;900&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#1B2A38;
+    --paper:#FFFFFF;
+    --bg:#F3F8FC;
+    --accent:#2E86DE;
+    --accent-deep:#1B5FA8;
+    --accent-pale:#E7F2FC;
+    --line:#D7E6F2;
+    --muted:#66798C;
+    --card:#FFFFFF;
+    --shadow: 0 6px 18px rgba(27,42,56,0.10);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--bg);
+    color:var(--ink);
+    font-family:'Zen Kaku Gothic New', sans-serif;
+    min-height:100vh;
+  }
+  @media (prefers-reduced-motion: reduce){
+    *{animation-duration:0.001ms !important; transition-duration:0.001ms !important;}
+  }
+  .wrap{max-width:980px; margin:0 auto; padding:24px 18px 100px;}
+
+  header{
+    background: linear-gradient(135deg, var(--accent) 0%, var(--accent-deep) 100%);
+    color:#fff;
+    border-radius:14px;
+    padding:22px 24px;
+    box-shadow:var(--shadow);
+    margin-bottom:14px;
+  }
+  header .top-row{
+    display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;
+  }
+  header h1{
+    font-weight:900;
+    font-size:clamp(21px,4vw,28px);
+    margin:0 0 6px;
+    letter-spacing:.02em;
+  }
+  header p{ margin:8px 0 0; font-size:13.5px; line-height:1.7; color:#EAF4FF; }
+  header .badge{
+    display:inline-block; font-size:11px; letter-spacing:.1em; font-weight:700;
+    background:rgba(255,255,255,0.18);
+    padding:3px 10px; border-radius:100px; color:#fff;
+  }
+  .x-link{
+    display:inline-flex; align-items:center; gap:6px;
+    background:#fff; color:var(--accent-deep);
+    font-weight:700; font-size:13px;
+    padding:8px 14px; border-radius:100px;
+    text-decoration:none;
+    box-shadow:0 3px 8px rgba(0,0,0,0.12);
+    white-space:nowrap;
+  }
+  .x-link:hover{ background:#EAF4FF; }
+  .x-link svg{ width:14px; height:14px; fill:currentColor; }
+
+  .notice{
+    background:var(--accent-pale);
+    border:1px solid var(--line);
+    color:var(--muted);
+    font-size:12px;
+    line-height:1.7;
+    padding:10px 14px;
+    border-radius:8px;
+    margin-bottom:22px;
+  }
+
+  .grid{
+    display:grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap:16px;
+  }
+  .card{
+    position:relative;
+    background:var(--card);
+    border:1.5px solid var(--line);
+    border-radius:10px;
+    padding:10px 10px 12px;
+    box-shadow:var(--shadow);
+    cursor:pointer;
+    transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease;
+    user-select:none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .card:hover, .card:focus-visible{
+    transform: translateY(-3px);
+    box-shadow: 0 10px 20px rgba(27,42,56,0.15);
+    outline:none;
+  }
+  .card:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
+  .card.selected{
+    border-color:var(--accent);
+    background:var(--accent-pale);
+  }
+  .card .no-tag{
+    font-size:11px; color:var(--muted); letter-spacing:.06em; margin:0 0 8px; font-weight:700;
+  }
+  .card .photo{
+    width:100%; aspect-ratio: 1 / 1; object-fit:cover;
+    border-radius:6px; border:1px solid var(--line);
+    background:var(--bg); display:block;
+  }
+  .card .name{
+    font-size:14px; font-weight:700; line-height:1.4; margin-top:9px; word-break:break-word;
+  }
+  .card .hint{ font-size:10.5px; color:var(--muted); margin-top:4px; }
+  .check-badge{
+    position:absolute; top:8px; right:8px;
+    width:24px; height:24px; border-radius:50%;
+    background:var(--accent); color:#fff;
+    display:flex; align-items:center; justify-content:center;
+    font-size:14px; font-weight:900;
+    opacity:0; transform:scale(0.5);
+    transition: opacity .15s ease, transform .15s ease;
+  }
+  .card.selected .check-badge{ opacity:1; transform:scale(1); }
+
+  .empty, .loading{
+    text-align:center; color:var(--muted); padding:60px 20px; font-size:14px;
+    border:1px dashed var(--line); border-radius:10px; background:var(--card);
+  }
+
+  .cart-bar{
+    position:sticky; top:10px; z-index:15;
+    background:var(--card);
+    border:1.5px solid var(--accent);
+    border-radius:12px;
+    padding:14px 16px;
+    box-shadow: 0 8px 22px rgba(27,42,56,0.14);
+    margin-bottom:20px;
+  }
+  .cart-bar h2{
+    font-size:13px; font-weight:900; margin:0 0 10px; color:var(--accent-deep);
+  }
+  .cart-chips{ display:flex; flex-wrap:wrap; gap:8px; margin-bottom:12px; }
+  .chip{
+    display:inline-flex; align-items:center; gap:6px;
+    background:var(--accent-pale); color:var(--accent-deep);
+    font-size:12.5px; font-weight:700;
+    padding:5px 6px 5px 10px; border-radius:100px;
+    border:1px solid var(--line);
+  }
+  .chip button{
+    background:none; border:none; color:var(--accent-deep); cursor:pointer;
+    font-size:14px; line-height:1; padding:2px 4px;
+  }
+  .cart-actions{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  .btn-copy{
+    background:var(--accent); color:#fff; border:none;
+    font-weight:700; font-size:13.5px;
+    padding:10px 18px; border-radius:8px; cursor:pointer;
+  }
+  .btn-copy:hover{ background:var(--accent-deep); }
+  .btn-clear{
+    background:none; border:1px solid var(--line); color:var(--muted);
+    font-size:12.5px; padding:9px 14px; border-radius:8px; cursor:pointer;
+  }
+  .copy-msg{ font-size:12px; color:var(--accent-deep); font-weight:700; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="top-row">
+      <div>
+        <span class="badge">交換募集中</span>
+        <h1>交換アイテム台帳</h1>
+      </div>
+      <a class="x-link" href="https://x.com/ginco_otorihiki" target="_blank" rel="noopener">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18.9 2H22l-7.6 8.7L23.3 22h-7.1l-5.6-6.9L4 22H1l8.2-9.4L1 2h7.3l5.1 6.3L18.9 2Zm-1.2 18h1.9L7.4 4h-2l12.3 16Z"/></svg>
+        X で連絡する
+      </a>
+    </div>
+    <p>気になるアイテムをタップして選択 → 下に出るコピー欄からまとめてコピーして、Xのリプライに貼り付けてね。</p>
+  </header>
+
+  <div class="notice">
+    ※できるだけ最新の状態を保つよう努めていますが、ご連絡いただいた時点で既に交換が決定している場合があります。あらかじめご了承ください。
+  </div>
+
+  <div id="cartBar" class="cart-bar" hidden>
+    <h2>交換希望リスト（<span id="cartCount">0</span>件）</h2>
+    <div id="cartChips" class="cart-chips"></div>
+    <div class="cart-actions">
+      <button class="btn-copy" id="copyBtn">まとめてコピー</button>
+      <button class="btn-clear" id="clearBtn">選択をクリア</button>
+      <span class="copy-msg" id="copyMsg"></span>
+    </div>
+  </div>
+
+  <div id="loading" class="loading">読み込み中…</div>
+  <div id="grid" class="grid"></div>
+  <div id="empty" class="empty" hidden>まだアイテムが登録されていません</div>
+</div>
+
+<script>
+/* ここをGoogleスプレッドシートの「ウェブに公開」CSV用URLに書き換えてね */
+const SHEET_CSV_URL = "SHEET_CSV_URL_HERE";
+
+/* スプレッドシートの列想定: 1列目=名前, 2列目=画像ファイル名(images/フォルダ内のファイル名) */
+/* 画像はこのHTMLと同じ場所にある images/ フォルダに置く前提 */
+
+let allItems = [];
+const selected = new Set(); // 選択中のインデックス(idx)を保持
+
+const grid = document.getElementById('grid');
+const emptyMsg = document.getElementById('empty');
+const loadingMsg = document.getElementById('loading');
+const cartBar = document.getElementById('cartBar');
+const cartChips = document.getElementById('cartChips');
+const cartCount = document.getElementById('cartCount');
+const copyBtn = document.getElementById('copyBtn');
+const clearBtn = document.getElementById('clearBtn');
+const copyMsg = document.getElementById('copyMsg');
+
+function parseCsv(text){
+  const rows = [];
+  let row = [], field = '', inQuotes = false;
+  for(let i = 0; i < text.length; i++){
+    const c = text[i];
+    if(inQuotes){
+      if(c === '"'){
+        if(text[i+1] === '"'){ field += '"'; i++; }
+        else inQuotes = false;
+      } else field += c;
+    } else {
+      if(c === '"') inQuotes = true;
+      else if(c === ','){ row.push(field); field = ''; }
+      else if(c === '\n'){ row.push(field); rows.push(row); row = []; field = ''; }
+      else if(c === '\r'){ /* skip */ }
+      else field += c;
+    }
+  }
+  if(field.length || row.length){ row.push(field); rows.push(row); }
+  return rows.filter(r => r.some(cell => cell.trim() !== ''));
+}
+
+async function loadItems(){
+  if(!SHEET_CSV_URL || SHEET_CSV_URL === "SHEET_CSV_URL_HERE"){
+    loadingMsg.textContent = "スプレッドシートのURLがまだ設定されていません";
+    return;
+  }
+  try{
+    const res = await fetch(SHEET_CSV_URL);
+    const text = await res.text();
+    const rows = parseCsv(text);
+    rows.shift(); // ヘッダー行を除く
+    allItems = rows
+      .map(r => ({ name: (r[0] || '').trim(), image: (r[1] || '').trim() }))
+      .filter(it => it.name && it.image);
+    render();
+  }catch(e){
+    loadingMsg.textContent = "読み込みに失敗しました。時間をおいて再読み込みしてみてね";
+  }
+}
+
+function escapeHtml(str){
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+function render(){
+  loadingMsg.hidden = true;
+  emptyMsg.hidden = allItems.length > 0;
+  grid.innerHTML = '';
+  allItems.forEach((item, idx) => {
+    const card = document.createElement('div');
+    card.className = 'card' + (selected.has(idx) ? ' selected' : '');
+    card.tabIndex = 0;
+    card.innerHTML = `
+      <div class="check-badge">✓</div>
+      <div class="no-tag">No.${idx + 1}</div>
+      <img class="photo" src="images/${encodeURIComponent(item.image)}" alt="${escapeHtml(item.name)}" loading="lazy">
+      <div class="name">${escapeHtml(item.name)}</div>
+      <div class="hint">タップで選択</div>
+    `;
+    card.addEventListener('click', () => toggleSelect(idx));
+    card.addEventListener('keydown', (e) => {
+      if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); toggleSelect(idx); }
+    });
+    grid.appendChild(card);
+  });
+  renderCart();
+}
+
+function toggleSelect(idx){
+  if(selected.has(idx)) selected.delete(idx);
+  else selected.add(idx);
+  render();
+}
+
+function renderCart(){
+  const list = [...selected].sort((a,b) => a - b);
+  cartBar.hidden = list.length === 0;
+  cartCount.textContent = list.length;
+  cartChips.innerHTML = '';
+  copyMsg.textContent = '';
+  list.forEach(idx => {
+    const item = allItems[idx];
+    const chip = document.createElement('span');
+    chip.className = 'chip';
+    chip.innerHTML = `No.${idx + 1} ${escapeHtml(item.name)} <button aria-label="削除" data-idx="${idx}">×</button>`;
+    chip.querySelector('button').addEventListener('click', (e) => {
+      e.stopPropagation();
+      selected.delete(idx);
+      render();
+    });
+    cartChips.appendChild(chip);
+  });
+}
+
+copyBtn.addEventListener('click', async () => {
+  const list = [...selected].sort((a,b) => a - b);
+  if(list.length === 0) return;
+  const lines = list.map(idx => `No.${idx + 1} ${allItems[idx].name}`);
+  const text = `以下のアイテムとの交換を希望します。\n` + lines.join('\n');
+  try{
+    await navigator.clipboard.writeText(text);
+    copyMsg.textContent = 'コピーしました！';
+  }catch(e){
+    copyMsg.textContent = 'コピーに失敗しました';
+  }
+});
+
+clearBtn.addEventListener('click', () => {
+  selected.clear();
+  render();
+});
+
+loadItems();
+</script>
+</body>
+</html>
