@@ -351,8 +351,11 @@ function renderCart(){
 copyBtn.addEventListener('click', async () => {
   const list = [...selected].sort((a,b) => a - b);
   if(list.length === 0) return;
-  const lines = list.map(idx => `No.${allItems[idx].no} ${allItems[idx].name}`);
-  const text = `以下のアイテムとの交換を希望します。\n` + lines.join('\n');
+  const parts = list.map(idx => {
+    const item = allItems[idx];
+    return `${item.no}・${item.character}・${item.name}`;
+  });
+  const text = `交換希望：` + parts.join(' / ');
   try{
     await navigator.clipboard.writeText(text);
     copyMsg.textContent = 'コピーしました！';
