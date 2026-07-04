@@ -132,6 +132,16 @@
     text-align:center; color:var(--muted); padding:60px 20px; font-size:14px;
     border:1px dashed var(--line); border-radius:10px; background:var(--card);
   }
+  .group-head{
+    grid-column: 1 / -1;
+    font-weight:900;
+    font-size:15px;
+    color:var(--accent-deep);
+    margin: 20px 0 2px;
+    padding-bottom:6px;
+    border-bottom:2px solid var(--accent-pale);
+  }
+  .group-head:first-child{ margin-top:0; }
 
   .cart-bar{
     position:sticky; top:10px; z-index:15;
@@ -258,9 +268,16 @@ async function loadItems(){
     const text = await res.text();
     const rows = parseCsv(text);
     rows.shift(); // ヘッダー行を除く
+    /* 列の並び: A=番号, B=キャラ名, C=アイテム名, D=画像ファイル名 */
     allItems = rows
-      .map(r => ({ name: (r[0] || '').trim(), image: (r[1] || '').trim() }))
-      .filter(it => it.name && it.image);
+      .map(r => ({
+        no: (r[0] || '').trim(),
+        character: (r[1] || '').trim() || 'その他',
+        name: (r[2] || '').trim(),
+        image: (r[3] || '').trim()
+      }))
+      .filter(it => it.name && it.image)
+      .sort((a, b) => (Number(a.no) || 0) - (Number(b.no) || 0));
     render();
   }catch(e){
     loadingMsg.textContent = "読み込みに失敗しました。時間をおいて再読み込みしてみてね";
@@ -277,13 +294,21 @@ function render(){
   loadingMsg.hidden = true;
   emptyMsg.hidden = allItems.length > 0;
   grid.innerHTML = '';
+  let lastCharacter = null;
   allItems.forEach((item, idx) => {
+    if(item.character !== lastCharacter){
+      const head = document.createElement('div');
+      head.className = 'group-head';
+      head.textContent = item.character;
+      grid.appendChild(head);
+      lastCharacter = item.character;
+    }
     const card = document.createElement('div');
     card.className = 'card' + (selected.has(idx) ? ' selected' : '');
     card.tabIndex = 0;
     card.innerHTML = `
       <div class="check-badge">✓</div>
-      <div class="no-tag">No.${idx + 1}</div>
+      <div class="no-tag">No.${escapeHtml(item.no)}</div>
       <img class="photo" src="images/${encodeURIComponent(item.image)}" alt="${escapeHtml(item.name)}" loading="lazy">
       <div class="name">${escapeHtml(item.name)}</div>
       <div class="hint">タップで選択</div>
@@ -313,7 +338,7 @@ function renderCart(){
     const item = allItems[idx];
     const chip = document.createElement('span');
     chip.className = 'chip';
-    chip.innerHTML = `No.${idx + 1} ${escapeHtml(item.name)} <button aria-label="削除" data-idx="${idx}">×</button>`;
+    chip.innerHTML = `No.${escapeHtml(item.no)} ${escapeHtml(item.name)} <button aria-label="削除" data-idx="${idx}">×</button>`;
     chip.querySelector('button').addEventListener('click', (e) => {
       e.stopPropagation();
       selected.delete(idx);
@@ -326,7 +351,7 @@ function renderCart(){
 copyBtn.addEventListener('click', async () => {
   const list = [...selected].sort((a,b) => a - b);
   if(list.length === 0) return;
-  const lines = list.map(idx => `No.${idx + 1} ${allItems[idx].name}`);
+  const lines = list.map(idx => `No.${allItems[idx].no} ${allItems[idx].name}`);
   const text = `以下のアイテムとの交換を希望します。\n` + lines.join('\n');
   try{
     await navigator.clipboard.writeText(text);
