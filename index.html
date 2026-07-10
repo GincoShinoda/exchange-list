@@ -78,6 +78,29 @@
     margin-bottom:22px;
   }
 
+  .tabs{
+    display:flex; gap:8px; margin-bottom:14px;
+  }
+  .tab-btn{
+    flex:1;
+    background:var(--card);
+    border:1.5px solid var(--line);
+    color:var(--muted);
+    font-family:inherit;
+    font-weight:700;
+    font-size:14px;
+    padding:11px 10px;
+    border-radius:10px;
+    cursor:pointer;
+    transition: all .15s ease;
+  }
+  .tab-btn.active{
+    background:var(--accent);
+    border-color:var(--accent);
+    color:#fff;
+    box-shadow:var(--shadow);
+  }
+
   .grid{
     display:grid;
     grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
@@ -117,6 +140,7 @@
     font-size:14px; font-weight:700; line-height:1.4; margin-top:9px; word-break:break-word;
   }
   .card .hint{ font-size:10.5px; color:var(--muted); margin-top:4px; }
+  .card .note{ font-size:10.5px; color:var(--accent-deep); margin-top:5px; font-weight:700; }
   .check-badge{
     position:absolute; top:8px; right:8px;
     width:24px; height:24px; border-radius:50%;
@@ -197,6 +221,11 @@
     <p>気になるアイテムをタップして選択 → 下に出るコピー欄からまとめてコピーして、Xのリプライに貼り付けてね。</p>
   </header>
 
+  <div class="tabs">
+    <button class="tab-btn active" id="tabOffer" type="button">譲：</button>
+    <button class="tab-btn" id="tabWanted" type="button">求：（大和以外も含む）</button>
+  </div>
+
   <div class="notice">
     ※できるだけ最新の状態を保つよう努めていますが、ご連絡いただいた時点で既に交換が決定している場合があります。あらかじめご了承ください。
   </div>
@@ -218,13 +247,16 @@
 
 <script>
 /* ここをGoogleスプレッドシートの「ウェブに公開」CSV用URLに書き換えてね */
-const SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQHMz19XmnFcHl4nJXFMcv8qa96R0Eca_U5GCob4dORY-Xb0jAfQJmbxWgzF3oUuHUNoByxuhY3Ds5I/pub?output=csv";
+const SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQHMz19XmnFcHl4nJXFMcv8qa96R0Eca_U5GCob4dORY-Xb0jAfQJmbxWgzF3oUuHUNoByxuhY3Ds5I/pub?gid=0&single=true&output=csv";
+const SHEET_CSV_URL_WANTED = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQHMz19XmnFcHl4nJXFMcv8qa96R0Eca_U5GCob4dORY-Xb0jAfQJmbxWgzF3oUuHUNoByxuhY3Ds5I/pub?gid=944414210&single=true&output=csv";
 
-/* スプレッドシートの列想定: 1列目=名前, 2列目=画像ファイル名(images/フォルダ内のファイル名) */
+/* 列の並び(両タブ共通): A=番号, B=キャラ名, C=アイテム名, D=画像ファイル名, E=メモ(短文) */
 /* 画像はこのHTMLと同じ場所にある images/ フォルダに置く前提 */
 
-let allItems = [];
-const selected = new Set(); // 選択中のインデックス(idx)を保持
+let offerItems = [];
+let wantedItems = [];
+let currentTab = 'offer';
+const selected = new Set(); // 選択中のインデックス(idx)を保持。交換できるものタブのみで使用
 
 const grid = document.getElementById('grid');
 const emptyMsg = document.getElementById('empty');
@@ -235,6 +267,8 @@ const cartCount = document.getElementById('cartCount');
 const copyBtn = document.getElementById('copyBtn');
 const clearBtn = document.getElementById('clearBtn');
 const copyMsg = document.getElementById('copyMsg');
+const tabOffer = document.getElementById('tabOffer');
+const tabWanted = document.getElementById('tabWanted');
 
 function parseCsv(text){
   const rows = [];
@@ -258,28 +292,39 @@ function parseCsv(text){
   return rows.filter(r => r.some(cell => cell.trim() !== ''));
 }
 
+function rowsToItems(rows){
+  rows = rows.slice();
+  rows.shift(); // ヘッダー行を除く
+  return rows
+    .map(r => ({
+      no: (r[0] || '').trim(),
+      character: (r[1] || '').trim() || 'その他',
+      name: (r[2] || '').trim(),
+      image: (r[3] || '').trim(),
+      note: (r[4] || '').trim()
+    }))
+    .filter(it => it.name && it.image)
+    .sort((a, b) => (Number(a.no) || 0) - (Number(b.no) || 0));
+}
+
+async function fetchItems(url){
+  if(!url || url.indexOf('_HERE') !== -1) return [];
+  const res = await fetch(url);
+  const text = await res.text();
+  return rowsToItems(parseCsv(text));
+}
+
 async function loadItems(){
-  if(!SHEET_CSV_URL || SHEET_CSV_URL === "SHEET_CSV_URL_HERE"){
-    loadingMsg.textContent = "スプレッドシートのURLがまだ設定されていません";
-    return;
-  }
   try{
-    const res = await fetch(SHEET_CSV_URL);
-    const text = await res.text();
-    const rows = parseCsv(text);
-    rows.shift(); // ヘッダー行を除く
-    /* 列の並び: A=番号, B=キャラ名, C=アイテム名, D=画像ファイル名 */
-    allItems = rows
-      .map(r => ({
-        no: (r[0] || '').trim(),
-        character: (r[1] || '').trim() || 'その他',
-        name: (r[2] || '').trim(),
-        image: (r[3] || '').trim()
-      }))
-      .filter(it => it.name && it.image)
-      .sort((a, b) => (Number(a.no) || 0) - (Number(b.no) || 0));
+    const [offer, wanted] = await Promise.all([
+      fetchItems(SHEET_CSV_URL),
+      fetchItems(SHEET_CSV_URL_WANTED)
+    ]);
+    offerItems = offer;
+    wantedItems = wanted;
     render();
   }catch(e){
+    loadingMsg.hidden = false;
     loadingMsg.textContent = "読み込みに失敗しました。時間をおいて再読み込みしてみてね";
   }
 }
@@ -291,11 +336,13 @@ function escapeHtml(str){
 }
 
 function render(){
+  const items = currentTab === 'offer' ? offerItems : wantedItems;
   loadingMsg.hidden = true;
-  emptyMsg.hidden = allItems.length > 0;
+  emptyMsg.hidden = items.length > 0;
+  cartBar.hidden = currentTab !== 'offer' || selected.size === 0;
   grid.innerHTML = '';
   let lastCharacter = null;
-  allItems.forEach((item, idx) => {
+  items.forEach((item, idx) => {
     if(item.character !== lastCharacter){
       const head = document.createElement('div');
       head.className = 'group-head';
@@ -304,22 +351,28 @@ function render(){
       lastCharacter = item.character;
     }
     const card = document.createElement('div');
-    card.className = 'card' + (selected.has(idx) ? ' selected' : '');
+    const selectable = currentTab === 'offer';
+    card.className = 'card' + (selectable && selected.has(idx) ? ' selected' : '');
     card.tabIndex = 0;
     card.innerHTML = `
-      <div class="check-badge">✓</div>
+      ${selectable ? '<div class="check-badge">✓</div>' : ''}
       <div class="no-tag">No.${escapeHtml(item.no)}</div>
       <img class="photo" src="images/${encodeURIComponent(item.image)}" alt="${escapeHtml(item.name)}" loading="lazy">
       <div class="name">${escapeHtml(item.name)}</div>
-      <div class="hint">タップで選択</div>
+      ${item.note ? `<div class="note">${escapeHtml(item.note)}</div>` : ''}
+      ${selectable ? '<div class="hint">タップで選択</div>' : ''}
     `;
-    card.addEventListener('click', () => toggleSelect(idx));
-    card.addEventListener('keydown', (e) => {
-      if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); toggleSelect(idx); }
-    });
+    if(selectable){
+      card.addEventListener('click', () => toggleSelect(idx));
+      card.addEventListener('keydown', (e) => {
+        if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); toggleSelect(idx); }
+      });
+    } else {
+      card.style.cursor = 'default';
+    }
     grid.appendChild(card);
   });
-  renderCart();
+  if(currentTab === 'offer') renderCart();
 }
 
 function toggleSelect(idx){
@@ -335,7 +388,7 @@ function renderCart(){
   cartChips.innerHTML = '';
   copyMsg.textContent = '';
   list.forEach(idx => {
-    const item = allItems[idx];
+    const item = offerItems[idx];
     const chip = document.createElement('span');
     chip.className = 'chip';
     chip.innerHTML = `No.${escapeHtml(item.no)} ${escapeHtml(item.name)} <button aria-label="削除" data-idx="${idx}">×</button>`;
@@ -352,7 +405,7 @@ copyBtn.addEventListener('click', async () => {
   const list = [...selected].sort((a,b) => a - b);
   if(list.length === 0) return;
   const parts = list.map(idx => {
-    const item = allItems[idx];
+    const item = offerItems[idx];
     return `${item.no}・${item.character}・${item.name}`;
   });
   const text = `交換希望：` + parts.join(' / ');
@@ -368,6 +421,15 @@ clearBtn.addEventListener('click', () => {
   selected.clear();
   render();
 });
+
+function switchTab(tab){
+  currentTab = tab;
+  tabOffer.classList.toggle('active', tab === 'offer');
+  tabWanted.classList.toggle('active', tab === 'wanted');
+  render();
+}
+tabOffer.addEventListener('click', () => switchTab('offer'));
+tabWanted.addEventListener('click', () => switchTab('wanted'));
 
 loadItems();
 </script>
